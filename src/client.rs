@@ -22,8 +22,18 @@ pub async fn main() {
 
     let mut will_send: u8 = 5;
     let player_packets: Arc<Mutex<Vec<PlayerPacket>>> = Arc::new(Mutex::new(Vec::new()));
+    // Initialize camera
 
     loop {
+        let mut camera = Camera2D {
+            target: vec2(player.x, player.y),
+            zoom: vec2(1.0 / screen_width() * 2.0, 1.0 / screen_height() * 2.0),
+            ..Default::default()
+        };
+
+        // Set camera to follow player
+        set_camera(&camera);
+
         if will_send == 1 {
             println!("{:?}", player);
             println!("Compressing player data");
@@ -70,14 +80,11 @@ pub async fn main() {
         } else {
             player.sliding = false;
         }
-        if is_mouse_button_pressed(MouseButton::Middle) {
+        if is_mouse_button_pressed(MouseButton::Middle) || is_key_pressed(KeyCode::S) {
             player.vy += 20.0;
         }
         if is_key_pressed(KeyCode::Space) {
             player.vy = -10.0;
-        }
-        if is_key_down(KeyCode::S) {
-            player.y += 5.0;
         }
         if is_key_down(KeyCode::A) {
             player.x -= 5.0;
@@ -123,6 +130,16 @@ pub async fn main() {
         render_player(&player);
         render_players(player_packets.clone().lock().unwrap().clone());
 
+        let mut pat = true;
+        for i in 0..10 {
+            draw_texture(
+                &Texture2D::from_file_with_format(include_bytes!("../res/tile_grass.png"), None),
+                i as f32 * 32.0,
+                screen_height(),
+                WHITE,
+            );
+        }
+
         next_frame().await;
     }
 }
@@ -142,10 +159,19 @@ fn render_player(player: &Player) {
         20.0,
         BLACK,
     );
-    draw_texture(
-        &Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None),
-        player.x - 32.0,
-        player.y,
-        WHITE,
-    );
+    if player.sliding {
+        draw_texture(
+            &Texture2D::from_file_with_format(include_bytes!("../res/slide.png"), None),
+            player.x - 32.0,
+            player.y,
+            WHITE,
+        );
+    } else {
+        draw_texture(
+            &Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None),
+            player.x - 32.0,
+            player.y,
+            WHITE,
+        );
+    }
 }
