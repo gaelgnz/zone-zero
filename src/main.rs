@@ -1,27 +1,34 @@
-use std::process;
+use std::{io, process};
 
 mod client;
+mod map;
+mod mapping_tool;
 mod packet;
 mod player;
 mod server;
-pub fn main() {
-    let args = std::env::args().collect::<Vec<String>>();
 
-    if args.len() != 2 {
-        eprintln!("Usage: {} <host/join>", args[0]);
-        process::exit(1);
-    }
+fn main() {
+    println!("Welcome to Momentum!\nChoose an option:");
+    println!("1. Start a server");
+    println!("2. Play");
+    println!("3. Make a map");
+    println!("4. Exit");
 
-    match args[1].as_str() {
-        "host" => {
-            server::main();
+    let mut buf = String::new();
+    io::stdin().read_line(&mut buf).unwrap();
+    let choice = match buf.trim().parse::<u8>() {
+        Ok(choice) => choice,
+        Err(_) => {
+            println!("Invalid choice");
+            return;
         }
-        "join" => {
-            let _ = client::main();
-        }
-        _ => {
-            eprintln!("Invalid mode");
-            process::exit(1);
-        }
+    };
+
+    match choice {
+        1 => server::main(),
+        2 => client::main(),
+        3 => mapping_tool::main(),
+        4 => process::exit(0),
+        _ => println!("Invalid choice"),
     }
 }

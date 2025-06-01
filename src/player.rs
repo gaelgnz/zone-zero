@@ -6,8 +6,11 @@ pub struct Player {
     pub vx: f32,
     pub vy: f32,
     pub dir: bool,
-    pub sliding: bool,
+    pub on_ground: bool,
+    pub is_still: bool,
+    pub message: String,
 }
+
 impl Player {
     pub fn new(id: u32, x: f32, y: f32) -> Self {
         Player {
@@ -17,10 +20,13 @@ impl Player {
             vx: 0.0,
             vy: 0.0,
             dir: false,
-            sliding: false,
+            on_ground: false,
+            is_still: false,
+            message: String::new(),
         }
     }
 }
+
 impl Player {
     pub fn from_player_packet(packet: &crate::packet::PlayerPacket) -> Self {
         Self {
@@ -29,8 +35,10 @@ impl Player {
             y: packet.y,
             vx: 0.0,
             vy: 0.0,
-            dir: false,
-            sliding: false,
+            dir: packet.dir,
+            on_ground: false,
+            is_still: false,
+            message: packet.message.clone(),
         }
     }
 }
