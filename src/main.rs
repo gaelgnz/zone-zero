@@ -1,6 +1,7 @@
 use std::{io, process};
 
 mod client;
+mod common;
 mod map;
 mod mapping_tool;
 mod packet;

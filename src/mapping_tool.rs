@@ -4,7 +4,7 @@ use macroquad::prelude::*;
 use serde_json;
 use std::{fs, io, process};
 
-const TILE_SIZE: f32 = 16.0;
+const TILE_SIZE: f32 = 32.0;
 const MAP_WIDTH: u32 = 256;
 const MAP_HEIGHT: u32 = 256;
 
@@ -34,7 +34,7 @@ pub async fn main() {
         clear_background(WHITE);
         let camera = Camera2D {
             target: vec2(cx, cy),
-            zoom: vec2(1.0 / screen_width() * 2.0, 1.0 / screen_height() * 2.0),
+            zoom: vec2(1.0 / screen_width() * 1.0, 1.0 / screen_height() * 1.0),
             ..Default::default()
         };
         set_camera(&camera);
@@ -72,6 +72,17 @@ pub async fn main() {
             }
         }
 
+        for object in &map.objects {
+            match object.kind {
+                ObjectKind::StartLine => {
+                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
+                }
+                ObjectKind::FinishLine => {
+                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
+                }
+            }
+        }
+
         egui_macroquad::ui(|egui_ctx| {
             egui::Window::new("Mapping Tool").show(egui_ctx, |ui| {
                 ui.heading("Drawing Mode");
@@ -92,18 +103,15 @@ pub async fn main() {
         });
         egui_macroquad::draw();
         // Draw tiles
+        if drawing {
+            if is_mouse_button_down(MouseButton::Left) || is_mouse_button_down(MouseButton::Right) {
+                let mouse_screen = vec2(mouse_position().0, mouse_position().1);
+                let mouse_world = camera.screen_to_world(mouse_screen);
 
-        // Mouse input
+                let x = (mouse_world.x / TILE_SIZE).floor() as usize;
+                let y = (mouse_world.y / TILE_SIZE).floor() as usize;
 
-        if is_mouse_button_down(MouseButton::Left) || is_mouse_button_down(MouseButton::Right) {
-            let mouse_screen = vec2(mouse_position().0, mouse_position().1);
-            let mouse_world = camera.screen_to_world(mouse_screen);
-
-            let x = (mouse_world.x / TILE_SIZE).floor() as usize;
-            let y = (mouse_world.y / TILE_SIZE).floor() as usize;
-
-            if x < MAP_WIDTH as usize && y < MAP_HEIGHT as usize {
-                if drawing {
+                if x < MAP_WIDTH as usize && y < MAP_HEIGHT as usize {
                     match tile_kind {
                         TileKind::Rock => {
                             map.tiles[y][x].kind = TileKind::Rock;
@@ -118,13 +126,24 @@ pub async fn main() {
                             map.tiles[y][x].collision = false;
                         }
                     }
-                } else {
-                    map.objects.push(Object {
-                        x: x as f32,
-                        y: y as f32,
-                        kind: ObjectKind::StartLine,
-                    });
                 }
+            }
+        } else {
+            let mouse_screen = vec2(mouse_position().0, mouse_position().1);
+            let mouse_world = camera.screen_to_world(mouse_screen);
+            draw_rectangle(
+                mouse_world.x - 16.0,
+                mouse_world.y - 16.0,
+                32.0,
+                32.0,
+                LIGHTGRAY,
+            );
+            if is_mouse_button_pressed(MouseButton::Left) {
+                map.objects.push(Object {
+                    x: mouse_world.x,
+                    y: mouse_world.y,
+                    kind: ObjectKind::StartLine,
+                });
             }
         }
 

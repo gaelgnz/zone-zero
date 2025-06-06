@@ -1,3 +1,4 @@
+use crate::common::{self, TILE_SIZE};
 use crate::map::{Map, ObjectKind, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::Player;
@@ -13,8 +14,8 @@ use std::{
 };
 use std::{process, thread};
 
-static PLAYER_WIDTH: f32 = 55.0;
-static PLAYER_HEIGHT: f32 = 64.0;
+static PLAYER_WIDTH: f32 = 32.0;
+static PLAYER_HEIGHT: f32 = 32.0;
 
 enum GameInputState {
     Chat,
@@ -27,6 +28,8 @@ pub async fn main() {
     let mut game_input_state = GameInputState::Chat;
 
     println!("Loading assets...");
+    let player_texture =
+        Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None);
     let chat_sound = load_sound("res/chat.wav").await.unwrap();
     let _ = load_sound("res/stal.wav").await.unwrap();
 
@@ -53,8 +56,8 @@ pub async fn main() {
     };
     println!("Map fetched");
 
-    let random_id = rand::random::<u32>();
-    let mut player = Player::new(random_id, 0.0, 0.0);
+    let random_id = rand::random::<char>();
+    let mut player = Player::new(random_id.to_string(), 0.0, 0.0);
 
     let mut will_send: u8 = 5;
     let player_packets: Arc<Mutex<Vec<PlayerPacket>>> = Arc::new(Mutex::new(Vec::new()));
@@ -78,7 +81,8 @@ pub async fn main() {
         };
         set_camera(&camera);
 
-        if will_send == 1 {
+        // == Send Packets ==
+        if will_send <= 1 {
             let packet = PlayerPacket::from_player(&player);
             send_packet(&mut stream, &packet).unwrap();
             will_send = 5;
@@ -111,25 +115,43 @@ pub async fn main() {
             Err(e) => println!("Stream clone error: {}", e),
         }
 
+        // === Drawing ===
+
         draw_text(
             pre_message.as_str(),
             player.x - 40.0,
-            player.y - 50.0,
+            player.y - 80.0,
             20.0,
             GRAY,
         );
-        render_player(&player);
-        render_players(player_packets.lock().unwrap().clone());
+        let mouse = mouse_position();
 
+        let mouse_world = camera.screen_to_world(mouse_position().into());
+        let player_center = vec2(player.x, player.y);
+        let direction = mouse_world - player_center;
+        player.rotation = direction.y.atan2(direction.x);
+
+        render_player(&player, &player_texture);
+        render_players(player_packets.lock().unwrap().clone(), &player_texture);
+
+        // === Map and Objects Rendering ===
         for (y, row) in map.tiles.iter().enumerate() {
             for (x, tile) in row.iter().enumerate() {
                 match tile.kind {
-                    TileKind::Grass => {
-                        draw_rectangle(x as f32 * 32.0 - 32.0, y as f32 * 32.0, 32.0, 32.0, GREEN)
-                    }
-                    TileKind::Rock => {
-                        draw_rectangle(x as f32 * 32.0 - 32.0, y as f32 * 32.0, 32.0, 32.0, BLACK)
-                    }
+                    TileKind::Grass => draw_rectangle(
+                        x as f32 * TILE_SIZE,
+                        y as f32 * TILE_SIZE,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                        GREEN,
+                    ),
+                    TileKind::Rock => draw_rectangle(
+                        x as f32 * TILE_SIZE,
+                        y as f32 * TILE_SIZE,
+                        TILE_SIZE,
+                        TILE_SIZE,
+                        BLACK,
+                    ),
                     TileKind::Empty => {}
                 }
             }
@@ -137,10 +159,10 @@ pub async fn main() {
         for object in &map.objects {
             match object.kind {
                 ObjectKind::StartLine => {
-                    draw_rectangle(object.x - 32.0, object.y - 32.0, 32.0, 32.0, BLUE)
+                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
                 }
                 ObjectKind::FinishLine => {
-                    draw_rectangle(object.x - 32.0, object.y - 32.0, 32.0, 32.0, BLUE)
+                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
                 }
             }
         }
@@ -152,38 +174,21 @@ pub async fn main() {
                     game_input_state = GameInputState::Chat;
                 }
 
+                let mut moving = false;
+
                 if is_key_down(KeyCode::A) {
-                    player.is_still = false;
                     player.vx = -5.0;
-                    player.dir = false;
                 } else if is_key_down(KeyCode::D) {
-                    player.is_still = false;
                     player.vx = 5.0;
-                    player.dir = true;
                 } else {
-                    if player.on_ground {
-                        player.vx *= 0.8;
-                        if player.vx.abs() < 0.6 {
-                            player.vx = 0.0;
-                        }
-                    } else {
-                        player.is_still = true;
-                        player.vx *= 0.9;
-                        if player.vx.abs() < 0.6 {
-                            player.vx = 0.0;
-                        }
-                    }
+                    player.vx = 0.0;
                 }
-
-                if is_key_pressed(KeyCode::Space) && player.on_ground {
-                    player.vy = -12.0;
-                    player.on_ground = false;
-                }
-
-                if player.vx == 0.0 {
-                    player.is_still = true;
-                } else if player.vx.abs() > 0.0 {
-                    player.is_still = false;
+                if is_key_down(KeyCode::W) {
+                    player.vy = -5.0;
+                } else if is_key_down(KeyCode::S) {
+                    player.vy = 5.0;
+                } else {
+                    player.vy = 0.0;
                 }
 
                 if is_key_pressed(KeyCode::Escape) {
@@ -311,8 +316,6 @@ pub async fn main() {
             }
         }
 
-        player.vy += 0.5;
-
         handle_collisions(&mut player, &map);
         time_played += get_frame_time();
 
@@ -320,18 +323,18 @@ pub async fn main() {
     }
 }
 
-fn render_players(player_packets: Vec<PlayerPacket>) {
+fn render_players(player_packets: Vec<PlayerPacket>, texture: &Texture2D) {
     for player_packet in player_packets {
         let player = Player::from_player_packet(&player_packet);
-        render_player(&player);
+        render_player(&player, texture);
     }
 }
 
-fn render_player(player: &Player) {
+fn render_player(player: &Player, texture: &Texture2D) {
     draw_text(
-        &format!("Player {}", player.id),
-        player.x - 25.0,
-        player.y - 5.0,
+        &format!("{}", player.id),
+        player.x - 40.0,
+        player.y - 50.0,
         20.0,
         BLACK,
     );
@@ -340,66 +343,41 @@ fn render_player(player: &Player) {
         draw_text(
             &player.message,
             player.x - 40.0,
-            player.y - 50.0,
+            player.y - 80.0,
             20.0,
             BLACK,
         );
     }
-
-    let texture = Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None);
-    if !player.on_ground && player.vy > 0.0 {
-        draw_texture_ex(
-            &Texture2D::from_file_with_format(include_bytes!("../res/fall.png"), None),
-            player.x - 32.0,
-            player.y,
-            WHITE,
-            DrawTextureParams {
-                flip_x: !player.dir,
-                ..Default::default()
-            },
-        );
-    } else if player.is_still {
-        draw_texture_ex(
-            &Texture2D::from_file_with_format(include_bytes!("../res/still.png"), None),
-            player.x - 32.0,
-            player.y,
-            WHITE,
-            DrawTextureParams {
-                flip_x: !player.dir,
-                ..Default::default()
-            },
-        );
-    } else {
-        draw_texture_ex(
-            &texture,
-            player.x - 32.0,
-            player.y,
-            WHITE,
-            DrawTextureParams {
-                flip_x: !player.dir,
-                ..Default::default()
-            },
-        );
-    }
+    draw_texture_ex(
+        &texture,
+        player.x - PLAYER_WIDTH / 2.0,
+        player.y - PLAYER_HEIGHT / 2.0,
+        WHITE,
+        DrawTextureParams {
+            rotation: player.rotation,
+            dest_size: Some(vec2(PLAYER_WIDTH, PLAYER_HEIGHT)),
+            ..Default::default()
+        },
+    );
+    draw_circle(player.x, player.y, 3.0, RED);
 }
 
 fn handle_collisions(player: &mut Player, map: &Map) {
     const TILE_SIZE: f32 = 32.0;
-    player.on_ground = false;
 
-    // Horizontal movement
+    let half_width = PLAYER_WIDTH / 2.0;
+    let half_height = PLAYER_HEIGHT / 2.0;
+
+    // --- Horizontal movement ---
     player.x += player.vx;
-    let (left, right) = (
-        (player.x / TILE_SIZE).floor() as isize,
-        ((player.x + PLAYER_WIDTH) / TILE_SIZE).ceil() as isize,
-    );
-    let (top, bottom) = (
-        (player.y / TILE_SIZE).floor() as isize,
-        ((player.y + PLAYER_HEIGHT) / TILE_SIZE).ceil() as isize,
-    );
 
-    for ty in top..bottom {
-        for tx in left..right {
+    let left_tile = ((player.x - half_width) / TILE_SIZE).floor() as isize;
+    let right_tile = ((player.x + half_width) / TILE_SIZE).ceil() as isize;
+    let top_tile = ((player.y - half_height) / TILE_SIZE).floor() as isize;
+    let bottom_tile = ((player.y + half_height) / TILE_SIZE).ceil() as isize;
+
+    for ty in top_tile..bottom_tile {
+        for tx in left_tile..right_tile {
             if let Some(tile) = map.get_tile(tx as usize, ty as usize) {
                 if tile.collision {
                     let tile_rect = Rect::new(
@@ -408,13 +386,20 @@ fn handle_collisions(player: &mut Player, map: &Map) {
                         TILE_SIZE,
                         TILE_SIZE,
                     );
-                    let player_rect = Rect::new(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+                    let player_rect = Rect::new(
+                        player.x - half_width,
+                        player.y - half_height,
+                        PLAYER_WIDTH,
+                        PLAYER_HEIGHT,
+                    );
 
                     if player_rect.overlaps(&tile_rect) {
                         if player.vx > 0.0 {
-                            player.x = tile_rect.x - PLAYER_WIDTH;
+                            // Moving right: push player back to left of tile
+                            player.x = tile_rect.x - half_width;
                         } else if player.vx < 0.0 {
-                            player.x = tile_rect.x + TILE_SIZE;
+                            // Moving left: push player to right of tile
+                            player.x = tile_rect.x + TILE_SIZE + half_width;
                         }
                         player.vx = 0.0;
                     }
@@ -423,19 +408,16 @@ fn handle_collisions(player: &mut Player, map: &Map) {
         }
     }
 
-    // Vertical movement
+    // --- Vertical movement ---
     player.y += player.vy;
-    let (left, right) = (
-        (player.x / TILE_SIZE).floor() as isize,
-        ((player.x + PLAYER_WIDTH) / TILE_SIZE).ceil() as isize,
-    );
-    let (top, bottom) = (
-        (player.y / TILE_SIZE).floor() as isize,
-        ((player.y + PLAYER_HEIGHT) / TILE_SIZE).ceil() as isize,
-    );
 
-    for ty in top..bottom {
-        for tx in left..right {
+    let left_tile = ((player.x - half_width) / TILE_SIZE).floor() as isize;
+    let right_tile = ((player.x + half_width) / TILE_SIZE).ceil() as isize;
+    let top_tile = ((player.y - half_height) / TILE_SIZE).floor() as isize;
+    let bottom_tile = ((player.y + half_height) / TILE_SIZE).ceil() as isize;
+
+    for ty in top_tile..bottom_tile {
+        for tx in left_tile..right_tile {
             if let Some(tile) = map.get_tile(tx as usize, ty as usize) {
                 if tile.collision {
                     let tile_rect = Rect::new(
@@ -444,17 +426,22 @@ fn handle_collisions(player: &mut Player, map: &Map) {
                         TILE_SIZE,
                         TILE_SIZE,
                     );
-                    let player_rect = Rect::new(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT);
+                    let player_rect = Rect::new(
+                        player.x - half_width,
+                        player.y - half_height,
+                        PLAYER_WIDTH,
+                        PLAYER_HEIGHT,
+                    );
 
                     if player_rect.overlaps(&tile_rect) {
                         if player.vy > 0.0 {
-                            player.y = tile_rect.y - PLAYER_HEIGHT;
-                            player.vy = 0.0;
-                            player.on_ground = true;
+                            // Moving down: push player back up
+                            player.y = tile_rect.y - half_height;
                         } else if player.vy < 0.0 {
-                            player.y = tile_rect.y + TILE_SIZE;
-                            player.vy = 0.0;
+                            // Moving up: push player down
+                            player.y = tile_rect.y + TILE_SIZE + half_height;
                         }
+                        player.vy = 0.0;
                     }
                 }
             }

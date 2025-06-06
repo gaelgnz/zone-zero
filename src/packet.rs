@@ -17,20 +17,20 @@ impl MapPacket {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Decode, Encode)]
 pub struct PlayerPacket {
-    pub id: u32,
+    pub id: String,
     pub x: f32,
     pub y: f32,
-    pub dir: bool,
+    pub rotation: f32,
     pub message: String,
 }
 
 impl PlayerPacket {
     pub fn from_player(player: &Player) -> Self {
         Self {
-            id: player.id,
+            id: player.id.to_string(),
             x: player.x,
             y: player.y,
-            dir: player.dir,
+            rotation: player.rotation,
             message: player.message.clone(),
         }
     }

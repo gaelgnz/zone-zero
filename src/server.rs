@@ -67,6 +67,7 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
             Ok(p) => p,
             Err(e) => {
                 eprintln!("Error receiving packet: {}", e);
+                eprintln!("Probably server/client mismatch! please restart!");
                 break;
             }
         };
