@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use macroquad::{miniquad::TextureFormat, prelude::ImageFormat, rand::gen_range, texture::Texture2D};
 use serde::{Serialize, Deserialize};
 use bincode::{Encode, Decode};
@@ -11,9 +13,13 @@ pub enum AmmoType {
 pub struct Weapon {
     pub damage: u32,
     pub bullets_per_shot: u32,
+    pub magazine: u32,
     pub magazine_size: u32,
     pub reload_time: u32,
     pub spread: f32,
+    pub is_auto: bool,
+    pub firerate: f32,
+    pub last_shot_time: f32,
     pub ammo_type: AmmoType,
 }
 impl Weapon {
@@ -29,9 +35,13 @@ impl Weapon {
             kind: ItemKind::Weapon(Weapon {
                 damage: 13,
                 bullets_per_shot: 1,
+                magazine: 30,
                 magazine_size: 30,
                 reload_time: 2,
                 spread: 2.0,
+                is_auto: true,
+                firerate: 0.3,
+                last_shot_time: 0.0,
                 ammo_type: AmmoType::Medium,
             }),
         }

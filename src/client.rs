@@ -3,14 +3,14 @@ use crate::debugutils::log;
 use crate::map::{Map, ObjectKind, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::{ActionType, Player};
-use crate::item::Item;
+use crate::item::{Item, ItemKind};
 use macroquad::rand::srand;
 use ::rand;
 use macroquad::audio::{load_sound, play_sound};
 use macroquad::prelude::*;
 use std::default::Default;
 use std::io::{Read, Write};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{
     net::TcpStream,
     sync::{Arc, Mutex},
@@ -204,6 +204,33 @@ GRAY,
 
         match game_input_state {
             GameInputState::Movement => {
+                if let ItemKind::Weapon(ref mut weapon) = player.items[player.current_item].kind {
+                    // Calculate minimum time between shots
+                    let shot_interval = Duration::from_secs_f32(1.0 / weapon.firerate);
+
+                    // Check if enough time passed since last shot
+                    let can_shoot = Instant::now().duration_since(weapon.last_shot_time) >= shot_interval;
+
+                    // Check if mouse pressed for semi-auto or just is_auto for auto mode
+                    let firing_condition = if weapon.is_auto {
+                        // Auto fire mode: hold mouse to keep shooting
+                        is_mouse_button_down(MouseButton::Left) && can_shoot
+                    } else {
+                        // Semi-auto mode: trigger only on mouse button press
+                        is_mouse_button_pressed(MouseButton::Left) && can_shoot
+                    };
+
+                    if firing_condition {
+                        if weapon.magazine >= weapon.bullets_per_shot {
+                            let mouse_world = camera.screen_to_world(vec2(mouse_position().0, mouse_position().1)); 
+                            weapon.magazine -= weapon.bullets_per_shot;
+                            weapon.last_shot_time = now;  // update last shot time
+                            draw_line(player.x, player.y, mouse_world.x, mouse_world.y, 5.0, YELLOW);
+                        } else {
+                            // Handle empty magazine here (reload or play empty sound)
+                        }
+                    }
+                }
                 if is_key_pressed(KeyCode::T) {
                     game_input_state = GameInputState::Chat;
                 }
@@ -493,3 +520,4 @@ fn handle_collisions(player: &mut Player, map: &Map) {
         }
     }
 }
+
