@@ -1,6 +1,6 @@
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
-
+use crate::item::Item;
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, Copy, PartialEq)]
 pub enum TileKind {
     Grass,
@@ -30,7 +30,7 @@ pub struct Map {
     pub height: u32,
     pub width: u32,
     pub tiles: Vec<Vec<Tile>>,
-    pub objects: Vec<Object>,
+    pub items: Vec<Item>,
 }
 
 impl Map {
@@ -51,7 +51,7 @@ impl Map {
                 ];
                 height as usize
             ],
-            objects: Vec::new(),
+            items: Vec::new(),
         }
     }
 }

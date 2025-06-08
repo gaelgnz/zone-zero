@@ -1,7 +1,9 @@
 use std::{io, process};
 
+mod debugutils;
 mod client;
 mod common;
+mod item;
 mod map;
 mod mapping_tool;
 mod packet;

@@ -1,3 +1,4 @@
+use crate::debugutils::log;
 use crate::map::Map;
 use crate::packet::{self, MapPacket};
 use std::io::{Read, Write};
@@ -60,8 +61,9 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
 
     // Send the serialized map bytes
     stream.write_all(&map).unwrap();
-
+    let mut frame_counter = 0;
     loop {
+        frame_counter += 1;
         // Receive a PlayerPacket (length-prefixed + bincode-encoded)
         let packet = match packet::receive_packet(&mut stream) {
             Ok(p) => p,
@@ -71,9 +73,9 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
                 break;
             }
         };
-        println!("Received packet: {:?}", packet);
+        log(frame_counter, 10, format!("Recieving packages correctly from {}", packet.id).as_str());
+        log(frame_counter, 10, format!("Conected clients: {}", clients.lock().unwrap().len()).as_str());
 
-        println!("Connected clients: {}", clients.lock().unwrap().len());
 
         let sender_addr = match stream.peer_addr() {
             Ok(addr) => addr,
@@ -86,7 +88,7 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
         let mut clients_lock = clients.lock().unwrap();
 
         clients_lock.retain(|client| {
-            let should_keep = match client.peer_addr() {
+            match client.peer_addr() {
                 Ok(addr) => {
                     if addr != sender_addr {
                         // Broadcast to other clients
@@ -109,8 +111,7 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
                     eprintln!("Failed to get client address: {}", e);
                     false
                 }
-            };
-            should_keep
+            }
         });
     }
 

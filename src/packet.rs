@@ -1,8 +1,9 @@
 use crate::map::Map;
-use crate::player::Player;
+use crate::player::{ActionType, Player};
 use bincode::{self, Decode, Encode};
 use std::io::{Error, Read, Write};
 use std::net::TcpStream;
+
 
 #[derive(Clone, Debug)]
 pub struct MapPacket {
@@ -17,21 +18,25 @@ impl MapPacket {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Decode, Encode)]
 pub struct PlayerPacket {
-    pub id: String,
+    pub name: String,
+    pub id: u64,
     pub x: f32,
     pub y: f32,
-    pub rotation: f32,
     pub message: String,
+    pub dir: bool,
+    pub actions: Vec<ActionType>
 }
 
 impl PlayerPacket {
     pub fn from_player(player: &Player) -> Self {
         Self {
-            id: player.id.to_string(),
+            name: player.name.to_string(),
+            id: player.id,
             x: player.x,
             y: player.y,
-            rotation: player.rotation,
             message: player.message.clone(),
+            dir: player.dir,
+            actions: player.actions.clone(),
         }
     }
 }

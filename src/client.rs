@@ -1,21 +1,24 @@
-use crate::common::{self, TILE_SIZE};
+use crate::common::TILE_SIZE;
+use crate::debugutils::log;
 use crate::map::{Map, ObjectKind, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
-use crate::player::Player;
+use crate::player::{ActionType, Player};
+use crate::item::Item;
+use macroquad::rand::srand;
 use ::rand;
 use macroquad::audio::{load_sound, play_sound};
 use macroquad::prelude::*;
 use std::default::Default;
 use std::io::{Read, Write};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     net::TcpStream,
     sync::{Arc, Mutex},
 };
 use std::{process, thread};
 
-static PLAYER_WIDTH: f32 = 32.0;
-static PLAYER_HEIGHT: f32 = 32.0;
+static PLAYER_WIDTH: f32 = 50.0;
+static PLAYER_HEIGHT: f32 = 50.0;
 
 enum GameInputState {
     Chat,
@@ -23,9 +26,11 @@ enum GameInputState {
     Menu,
 }
 
-#[macroquad::main("Momentum")]
+#[macroquad::main("Zone zero")]
 pub async fn main() {
-    let mut game_input_state = GameInputState::Chat;
+    srand(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64);
+
+    let mut game_input_state = GameInputState::Movement;
 
     println!("Loading assets...");
     let player_texture =
@@ -45,7 +50,7 @@ pub async fn main() {
     let mut map_buf = vec![0u8; map_size];
     stream.read_exact(&mut map_buf).unwrap();
 
-    let map: Map = match bincode::decode_from_slice(&map_buf, bincode::config::standard()) {
+    let mut map: Map = match bincode::decode_from_slice(&map_buf, bincode::config::standard()) {
         Ok((map, _)) => map,
         Err(e) => {
             panic!(
@@ -56,8 +61,8 @@ pub async fn main() {
     };
     println!("Map fetched");
 
-    let random_id = rand::random::<char>();
-    let mut player = Player::new(random_id.to_string(), 0.0, 0.0);
+    let random_name = rand::random::<char>();
+    let mut player = Player::new(random_name.to_string(), 0.0, 0.0);
 
     let mut will_send: u8 = 5;
     let player_packets: Arc<Mutex<Vec<PlayerPacket>>> = Arc::new(Mutex::new(Vec::new()));
@@ -66,7 +71,12 @@ pub async fn main() {
     let mut pre_message = String::new();
     let mut delete_message_timer = 0.0;
 
+    let mut frame_counter: i128 = 0;
+
     loop {
+        let player_rect = Rect::new(player.x, player.y, 64.0, 64.0);
+        player.actions.clear();
+
         if delete_message_timer <= 0.0 {
             player.message.clear();
             pre_message.clear();
@@ -81,14 +91,6 @@ pub async fn main() {
         };
         set_camera(&camera);
 
-        // == Send Packets ==
-        if will_send <= 1 {
-            let packet = PlayerPacket::from_player(&player);
-            send_packet(&mut stream, &packet).unwrap();
-            will_send = 5;
-        } else {
-            will_send -= 1;
-        }
 
         clear_background(WHITE);
 
@@ -100,7 +102,7 @@ pub async fn main() {
                     Ok(packet) => {
                         let mut packets = player_packets.lock().unwrap();
                         if let Some(existing) = packets.iter_mut().find(|p| p.id == packet.id) {
-                            println!("Received packet from {}, {:?}", packet.id, packet);
+                            log(frame_counter, 10, format!("Recieving packages correctly from {}", packet.id).as_str());
                             *existing = packet;
                         } else {
                             println!("Received packet from {}, {:?}", packet.id, packet);
@@ -114,22 +116,31 @@ pub async fn main() {
             }
             Err(e) => println!("Stream clone error: {}", e),
         }
+        
 
+        let packets = player_packets.lock().unwrap().clone();
+
+        for packet in packets {
+           for action in packet.actions {
+                match action {
+                    ActionType::PickUp(id) => {
+                        println!("retaining item..");
+                        map.items.retain(|item| item.id != id);
+
+                    }
+                }
+           } 
+        }
         // === Drawing ===
+        
 
         draw_text(
             pre_message.as_str(),
             player.x - 40.0,
             player.y - 80.0,
             20.0,
-            GRAY,
+GRAY,
         );
-        let mouse = mouse_position();
-
-        let mouse_world = camera.screen_to_world(mouse_position().into());
-        let player_center = vec2(player.x, player.y);
-        let direction = mouse_world - player_center;
-        player.rotation = direction.y.atan2(direction.x);
 
         render_player(&player, &player_texture);
         render_players(player_packets.lock().unwrap().clone(), &player_texture);
@@ -156,30 +167,53 @@ pub async fn main() {
                 }
             }
         }
-        for object in &map.objects {
-            match object.kind {
-                ObjectKind::StartLine => {
-                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
-                }
-                ObjectKind::FinishLine => {
-                    draw_rectangle(object.x - 16.0, object.y - 16.0, 32.0, 32.0, BLUE)
+
+ 
+
+
+        for item in &mut map.items {
+            let item_rect = Rect::new(item.x, item.y, 32.0, 32.0);
+           
+
+            if is_key_pressed(KeyCode::E) && player_rect.overlaps(&item_rect) {
+                    player.items.push(Item { id: item.id, x: item.x, y: item.y, picked: false, name: item.name.clone(), texture: item.texture.clone(), texture_equipped: item.texture_equipped.clone(), kind: item.kind.clone() });
+                    player.actions.push(ActionType::PickUp(item.id));            
+            }
+
+            draw_texture_ex(
+                &Texture2D::from_file_with_format(include_bytes!("../res/weapon_ak47.png"), None),
+                item.x,
+                item.y,
+                WHITE,
+                DrawTextureParams {
+                    ..Default::default()
+                },
+            );
+        }
+
+        for action in &player.actions {
+            match action {
+                ActionType::PickUp(id) => {
+                    map.items.retain(|x| x.id != *id);
                 }
             }
         }
+            
 
-        // INPUT
+
+
         match game_input_state {
             GameInputState::Movement => {
                 if is_key_pressed(KeyCode::T) {
                     game_input_state = GameInputState::Chat;
                 }
 
-                let mut moving = false;
-
                 if is_key_down(KeyCode::A) {
                     player.vx = -5.0;
+                    player.dir = false;
                 } else if is_key_down(KeyCode::D) {
                     player.vx = 5.0;
+                    player.dir = true;
                 } else {
                     player.vx = 0.0;
                 }
@@ -316,9 +350,20 @@ pub async fn main() {
             }
         }
 
+        // == Send Packets ==
+        if will_send <= 1 {
+            let packet = PlayerPacket::from_player(&player);
+            send_packet(&mut stream, &packet).unwrap();
+            will_send = 1;
+        } else {
+            will_send -= 1;
+        }
+
+
         handle_collisions(&mut player, &map);
         time_played += get_frame_time();
-
+        
+        frame_counter += 1;
         next_frame().await;
     }
 }
@@ -332,14 +377,14 @@ fn render_players(player_packets: Vec<PlayerPacket>, texture: &Texture2D) {
 
 fn render_player(player: &Player, texture: &Texture2D) {
     draw_text(
-        &format!("{}", player.id),
+        &player.name.to_string(),
         player.x - 40.0,
         player.y - 50.0,
         20.0,
         BLACK,
     );
 
-    if let Some(_) = player.message.chars().nth(0) {
+    if player.message.chars().next().is_some() {
         draw_text(
             &player.message,
             player.x - 40.0,
@@ -349,12 +394,12 @@ fn render_player(player: &Player, texture: &Texture2D) {
         );
     }
     draw_texture_ex(
-        &texture,
+        texture,
         player.x - PLAYER_WIDTH / 2.0,
         player.y - PLAYER_HEIGHT / 2.0,
         WHITE,
         DrawTextureParams {
-            rotation: player.rotation,
+            flip_x: player.dir,
             dest_size: Some(vec2(PLAYER_WIDTH, PLAYER_HEIGHT)),
             ..Default::default()
         },
