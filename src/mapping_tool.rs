@@ -1,4 +1,4 @@
-use crate::{item::{self, Item, ItemKind, Weapon}, map::{Map, Object, ObjectKind, TileKind}};
+use crate::{item::{Weapon}, map::{Map, TileKind}};
 use macroquad::prelude::*;
 use macroquad::rand::*;
 use std::time::{SystemTime, UNIX_EPOCH};

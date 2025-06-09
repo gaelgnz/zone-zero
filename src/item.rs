@@ -30,8 +30,8 @@ impl Weapon {
             y: py,
             picked: ppicked,
             name: String::from(""),
-            texture: Some("../res/weapon_ak47.png".to_string()),
-            texture_equipped: Some(String::new()),
+            texture: Some("res/weapon_ak47.png".to_string()),
+            texture_equipped: Some("res/weapon_ak47_picked.png".to_string()),
             kind: ItemKind::Weapon(Weapon {
                 damage: 13,
                 bullets_per_shot: 1,

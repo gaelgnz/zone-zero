@@ -1,6 +1,7 @@
 use crate::common::TILE_SIZE;
+use std::fs;
 use crate::debugutils::log;
-use crate::map::{Map, ObjectKind, TileKind};
+use crate::map::{Map, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::{ActionType, Player};
 use crate::item::{Item, ItemKind};
@@ -17,6 +18,8 @@ use std::{
 };
 use std::{process, thread};
 
+use macroquad::ui::{hash, root_ui, widgets};
+
 static PLAYER_WIDTH: f32 = 50.0;
 static PLAYER_HEIGHT: f32 = 50.0;
 
@@ -26,7 +29,16 @@ enum GameInputState {
     Menu,
 }
 
-#[macroquad::main("Zone zero")]
+fn conf() -> Conf {
+    Conf {
+       window_title: "Zone zero".to_string(),
+       fullscreen: false,
+       high_dpi: false,
+       ..Default::default() 
+    }
+}
+
+#[macroquad::main(conf)]
 pub async fn main() {
     srand(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64);
 
@@ -71,6 +83,8 @@ pub async fn main() {
     let mut pre_message = String::new();
     let mut delete_message_timer = 0.0;
 
+    let mut last_shot_time: Instant = Instant::now();
+
     let mut frame_counter: i128 = 0;
 
     loop {
@@ -86,7 +100,7 @@ pub async fn main() {
 
         let camera = Camera2D {
             target: vec2(player.x, player.y),
-            zoom: vec2(1.0 / screen_width() * 2.0, 1.0 / screen_height() * 2.0),
+            zoom: vec2(1.0 / screen_width() * 3.0, 1.0 / screen_height() * 3.0),
             ..Default::default()
         };
         set_camera(&camera);
@@ -142,8 +156,8 @@ pub async fn main() {
 GRAY,
         );
 
-        render_player(&player, &player_texture);
-        render_players(player_packets.lock().unwrap().clone(), &player_texture);
+        render_player(&player, &player_texture).await;
+        render_players(player_packets.lock().unwrap().clone(), &player_texture).await;
 
         // === Map and Objects Rendering ===
         for (y, row) in map.tiles.iter().enumerate() {
@@ -176,7 +190,7 @@ GRAY,
            
 
             if is_key_pressed(KeyCode::E) && player_rect.overlaps(&item_rect) {
-                    player.items.push(Item { id: item.id, x: item.x, y: item.y, picked: false, name: item.name.clone(), texture: item.texture.clone(), texture_equipped: item.texture_equipped.clone(), kind: item.kind.clone() });
+                player.items.push(Item { id: item.id, x: item.x, y: item.y, picked: false, name: item.name.clone(), texture: item.texture.clone(), texture_equipped: item.texture_equipped.clone(), kind: item.kind.clone() });
                     player.actions.push(ActionType::PickUp(item.id));            
             }
 
@@ -204,32 +218,42 @@ GRAY,
 
         match game_input_state {
             GameInputState::Movement => {
-                if let ItemKind::Weapon(ref mut weapon) = player.items[player.current_item].kind {
-                    // Calculate minimum time between shots
-                    let shot_interval = Duration::from_secs_f32(1.0 / weapon.firerate);
+                if !player.items.is_empty() {
 
-                    // Check if enough time passed since last shot
-                    let can_shoot = Instant::now().duration_since(weapon.last_shot_time) >= shot_interval;
+                    if let ItemKind::Weapon(ref mut weapon) = player.items[player.current_item].kind {
+                        // Calculate minimum time between shots
+                        let shot_interval = Duration::from_secs_f32(1.0 / weapon.firerate);
 
-                    // Check if mouse pressed for semi-auto or just is_auto for auto mode
-                    let firing_condition = if weapon.is_auto {
-                        // Auto fire mode: hold mouse to keep shooting
-                        is_mouse_button_down(MouseButton::Left) && can_shoot
-                    } else {
-                        // Semi-auto mode: trigger only on mouse button press
-                        is_mouse_button_pressed(MouseButton::Left) && can_shoot
-                    };
+                        // Check if enough time passed since last shot
+                        let can_shoot = Instant::now().duration_since(last_shot_time) >= shot_interval;
 
-                    if firing_condition {
-                        if weapon.magazine >= weapon.bullets_per_shot {
-                            let mouse_world = camera.screen_to_world(vec2(mouse_position().0, mouse_position().1)); 
-                            weapon.magazine -= weapon.bullets_per_shot;
-                            weapon.last_shot_time = now;  // update last shot time
-                            draw_line(player.x, player.y, mouse_world.x, mouse_world.y, 5.0, YELLOW);
+                        // Check if mouse pressed for semi-auto or just is_auto for auto mode
+                        let firing_condition = if weapon.is_auto {
+                            is_mouse_button_down(MouseButton::Left) && can_shoot
                         } else {
-                            // Handle empty magazine here (reload or play empty sound)
+                            // Semi-auto mode: trigger only on mouse button press
+                            is_mouse_button_pressed(MouseButton::Left) && can_shoot
+                        };
+
+                        if firing_condition {
+                            if weapon.magazine >= weapon.bullets_per_shot {
+                                let mouse_world = camera.screen_to_world(vec2(mouse_position().0, mouse_position().1)); 
+                                
+                                last_shot_time = Instant::now();
+                                weapon.magazine -= weapon.bullets_per_shot;
+                                draw_line(player.x, player.y, mouse_world.x, mouse_world.y, 5.0, YELLOW);
+                            } else {
+                            
+                            }
                         }
                     }
+                }
+
+                if is_key_pressed(KeyCode::Key1) {
+                    player.current_item = 1;
+                }
+                if is_key_pressed(KeyCode::Key2) {
+                    player.current_item = 2;
                 }
                 if is_key_pressed(KeyCode::T) {
                     game_input_state = GameInputState::Chat;
@@ -386,23 +410,31 @@ GRAY,
             will_send -= 1;
         }
 
+        widgets::Window::new(hash!(), vec2(0.0, 100.0), vec2(32., 200.))
+        .movable(false)
+        .titlebar(false)
+        .ui(&mut root_ui(), |ui| {
+            for (i, item) in player.items.iter().enumerate() {
+                println!("{:?}", item.texture.clone());
+                ui.texture(Texture2D::from_file_with_format(fs::read(item.texture.clone().expect("Expected texture").as_str()).unwrap().as_slice(), None), 32.0, 32.0);
+            }
+        });
 
         handle_collisions(&mut player, &map);
         time_played += get_frame_time();
-        
         frame_counter += 1;
         next_frame().await;
     }
 }
 
-fn render_players(player_packets: Vec<PlayerPacket>, texture: &Texture2D) {
+async fn render_players(player_packets: Vec<PlayerPacket>, texture: &Texture2D) {
     for player_packet in player_packets {
         let player = Player::from_player_packet(&player_packet);
-        render_player(&player, texture);
+        render_player(&player, texture).await;
     }
 }
 
-fn render_player(player: &Player, texture: &Texture2D) {
+async fn render_player(player: &Player, texture: &Texture2D) {
     draw_text(
         &player.name.to_string(),
         player.x - 40.0,
@@ -410,6 +442,16 @@ fn render_player(player: &Player, texture: &Texture2D) {
         20.0,
         BLACK,
     );
+
+
+    if !player.items.is_empty() {  
+        draw_texture_ex(&load_texture(player.items.clone()[player.current_item].texture_equipped.clone().unwrap().as_str()).await.unwrap(), player.x, player.y, WHITE, DrawTextureParams { 
+            flip_x: player.dir,
+            ..Default::default() 
+        });
+    }
+
+
 
     if player.message.chars().next().is_some() {
         draw_text(
@@ -431,7 +473,7 @@ fn render_player(player: &Player, texture: &Texture2D) {
             ..Default::default()
         },
     );
-    draw_circle(player.x, player.y, 3.0, RED);
+
 }
 
 fn handle_collisions(player: &mut Player, map: &Map) {

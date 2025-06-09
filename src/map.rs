@@ -19,13 +19,6 @@ pub enum ObjectKind {
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
-pub struct Object {
-    pub x: f32,
-    pub y: f32,
-    pub kind: ObjectKind,
-}
-
-#[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub struct Map {
     pub height: u32,
     pub width: u32,
