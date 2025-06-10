@@ -1,3 +1,4 @@
+use crate::item::ItemKind;
 use crate::map::Map;
 use crate::player::{ActionType, Player};
 use bincode::{self, Decode, Encode};
@@ -24,7 +25,8 @@ pub struct PlayerPacket {
     pub y: f32,
     pub message: String,
     pub dir: bool,
-    pub actions: Vec<ActionType>
+    pub actions: Vec<ActionType>,
+    pub current_item: ItemKind,
 }
 
 impl PlayerPacket {
