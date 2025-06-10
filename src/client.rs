@@ -4,8 +4,8 @@ use crate::debugutils::log;
 use crate::map::{Map, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::{ActionType, Player};
-use crate::item::{Item, ItemKind};
-use macroquad::rand::srand;
+use crate::item::{Item, ItemKind, WeaponKind};
+use macroquad::rand::{gen_range, srand};
 use ::rand;
 use macroquad::audio::{load_sound, play_sound};
 use macroquad::prelude::*;
@@ -106,7 +106,7 @@ pub async fn main() {
         set_camera(&camera);
 
 
-        clear_background(WHITE);
+        clear_background(GRAY);
 
         // Receive packets
         match stream.try_clone() {
@@ -142,6 +142,10 @@ pub async fn main() {
                         map.items.retain(|item| item.id != id);
 
                     }
+                    ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
+                        draw_line(from_x, from_y, to_x, to_y, 1.0, YELLOW);
+                    }
+ 
                 }
            } 
         }
@@ -209,6 +213,9 @@ GRAY,
             match action {
                 ActionType::PickUp(id) => {
                     map.items.retain(|x| x.id != *id);
+                },
+                ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
+                    draw_line(*from_x, *from_y, *to_x, *to_y, 1.0, YELLOW);
                 }
             }
         }
@@ -221,27 +228,33 @@ GRAY,
                 if !player.items.is_empty() {
 
                     if let ItemKind::Weapon(ref mut weapon) = player.items[player.current_item].kind {
-                        // Calculate minimum time between shots
-                        let shot_interval = Duration::from_secs_f32(1.0 / weapon.firerate);
+                        let shot_interval = Duration::from_secs_f32(weapon.firerate);
 
-                        // Check if enough time passed since last shot
                         let can_shoot = Instant::now().duration_since(last_shot_time) >= shot_interval;
 
-                        // Check if mouse pressed for semi-auto or just is_auto for auto mode
                         let firing_condition = if weapon.is_auto {
                             is_mouse_button_down(MouseButton::Left) && can_shoot
                         } else {
-                            // Semi-auto mode: trigger only on mouse button press
                             is_mouse_button_pressed(MouseButton::Left) && can_shoot
                         };
 
                         if firing_condition {
                             if weapon.magazine >= weapon.bullets_per_shot {
                                 let mouse_world = camera.screen_to_world(vec2(mouse_position().0, mouse_position().1)); 
+                                let offset_x = weapon.shotoffset.0;
+                                let offset_y = weapon.shotoffset.1;    
                                 
+                                let spread_x = gen_range(-weapon.spread, weapon.spread);
+                                let spread_y = gen_range(-weapon.spread, weapon.spread);
+
                                 last_shot_time = Instant::now();
                                 weapon.magazine -= weapon.bullets_per_shot;
-                                draw_line(player.x, player.y, mouse_world.x, mouse_world.y, 5.0, YELLOW);
+                                draw_line(player.x + if player.dir {offset_x} else {-offset_x}, player.y + offset_y, mouse_world.x + spread_x, mouse_world.y + spread_y, 2.0, YELLOW);
+                                player.actions.push(ActionType::Shot((WeaponKind::Ak47, 
+                                    player.x + if player.dir {offset_x} else {-offset_x}, 
+                                    player.y + offset_y, 
+                                    mouse_world.x, 
+                                    mouse_world.y)))
                             } else {
                             
                             }
@@ -443,16 +456,6 @@ async fn render_player(player: &Player, texture: &Texture2D) {
         BLACK,
     );
 
-
-    if !player.items.is_empty() {  
-        draw_texture_ex(&load_texture(player.items.clone()[player.current_item].texture_equipped.clone().unwrap().as_str()).await.unwrap(), player.x, player.y, WHITE, DrawTextureParams { 
-            flip_x: player.dir,
-            ..Default::default() 
-        });
-    }
-
-
-
     if player.message.chars().next().is_some() {
         draw_text(
             &player.message,
@@ -474,6 +477,19 @@ async fn render_player(player: &Player, texture: &Texture2D) {
         },
     );
 
+
+    if !player.items.is_empty() {
+        println!("{:?}", player.items[player.current_item]);
+        draw_texture_ex(&load_texture(player.items.clone()[player.current_item].texture_equipped.clone().unwrap().as_str()).await.unwrap(),
+        player.x - PLAYER_WIDTH / 2.0,
+        player.y - PLAYER_HEIGHT / 2.0,
+        WHITE,
+        DrawTextureParams {
+            flip_x: player.dir,
+            dest_size: Some(vec2(PLAYER_WIDTH, PLAYER_HEIGHT)),
+            ..Default::default()
+        });
+    }
 }
 
 fn handle_collisions(player: &mut Player, map: &Map) {

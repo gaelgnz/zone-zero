@@ -3,9 +3,10 @@ use std::u64;
 use bincode::{Decode, Encode};
 use macroquad::rand::gen_range;
 
-use crate::item::Item;
+use crate::item::{Item, WeaponKind};
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Decode, Encode)]
 pub enum ActionType {
+    Shot((WeaponKind, f32, f32, f32, f32)),
     PickUp(u64)
 }
 
