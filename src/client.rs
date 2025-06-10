@@ -1,14 +1,15 @@
 use crate::common::TILE_SIZE;
-use std::fs;
+use std::{env, fs, io};
 use crate::debugutils::log;
 use crate::map::{Map, TileKind};
 use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::{ActionType, Player};
 use crate::item::{Item, ItemKind, WeaponKind};
-use macroquad::rand::{gen_range, srand};
+use macroquad::rand::{gen_range, srand, ChooseRandom};
 use ::rand;
 use macroquad::audio::{load_sound, play_sound};
 use macroquad::prelude::*;
+use sha2::{Digest, Sha256};
 use std::default::Default;
 use std::io::{Read, Write};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -48,10 +49,18 @@ pub async fn main() {
     let player_texture =
         Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None);
     let chat_sound = load_sound("res/chat.wav").await.unwrap();
-    let _ = load_sound("res/stal.wav").await.unwrap();
 
     println!("Connecting to server...");
-    let mut stream = TcpStream::connect("127.0.0.1:8080").unwrap();
+    let mut stream = match TcpStream::connect("127.0.0.1:8080") {
+        Ok(stream) => {
+            println!("Connected to server");
+            stream
+        }
+        Err(e) => {
+            eprintln!("Failed to connect to server: {}", e);
+            process::exit(1);
+        }
+    };
 
     let mut size_buf = [0u8; 4];
     stream.read_exact(&mut size_buf).unwrap();
@@ -73,7 +82,11 @@ pub async fn main() {
     };
     println!("Map fetched");
 
-    let random_name = rand::random::<char>();
+    let random_name = ["Mark", "Lily", "Jake", "Ella", "Ryan", "Zoe", "Alex", "Mia", "Luke", "Emmma"]
+        .choose()
+        .unwrap_or(&"Player")
+        .to_string();
+
     let mut player = Player::new(random_name.to_string(), 0.0, 0.0);
 
     let mut will_send: u8 = 5;
@@ -86,6 +99,12 @@ pub async fn main() {
     let mut last_shot_time: Instant = Instant::now();
 
     let mut frame_counter: i128 = 0;
+
+    let exe = env::current_exe().unwrap();
+    let mut sha256 = Sha256::new();
+    io::copy(&mut fs::File::open(exe).unwrap(), &mut sha256).unwrap();
+    let hash = sha256.finalize();
+    println!("Client started! ~ Hash: {:x}", hash);
 
     loop {
         let player_rect = Rect::new(player.x, player.y, 64.0, 64.0);
@@ -138,12 +157,11 @@ pub async fn main() {
            for action in packet.actions {
                 match action {
                     ActionType::PickUp(id) => {
-                        println!("retaining item..");
                         map.items.retain(|item| item.id != id);
 
                     }
                     ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
-                        draw_line(from_x, from_y, to_x, to_y, 1.0, YELLOW);
+                        draw_line(from_x, from_y, to_x, to_y, 1.0, WHITE);
                     }
  
                 }
@@ -215,7 +233,7 @@ GRAY,
                     map.items.retain(|x| x.id != *id);
                 },
                 ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
-                    draw_line(*from_x, *from_y, *to_x, *to_y, 1.0, YELLOW);
+                    draw_line(*from_x, *from_y, *to_x, *to_y, 1.0, WHITE);
                 }
             }
         }
@@ -249,7 +267,7 @@ GRAY,
 
                                 last_shot_time = Instant::now();
                                 weapon.magazine -= weapon.bullets_per_shot;
-                                draw_line(player.x + if player.dir {offset_x} else {-offset_x}, player.y + offset_y, mouse_world.x + spread_x, mouse_world.y + spread_y, 2.0, YELLOW);
+                                draw_line(player.x + if player.dir {offset_x} else {-offset_x}, player.y + offset_y, mouse_world.x + spread_x, mouse_world.y + spread_y,1.0, WHITE);
                                 player.actions.push(ActionType::Shot((WeaponKind::Ak47, 
                                     player.x + if player.dir {offset_x} else {-offset_x}, 
                                     player.y + offset_y, 
@@ -263,10 +281,34 @@ GRAY,
                 }
 
                 if is_key_pressed(KeyCode::Key1) {
-                    player.current_item = 1;
+                    player.current_item = 0;
                 }
                 if is_key_pressed(KeyCode::Key2) {
+                    player.current_item = 1;
+                }
+                if is_key_pressed(KeyCode::Key3) {
                     player.current_item = 2;
+                }
+                if is_key_pressed(KeyCode::Key4) {
+                    player.current_item = 3;
+                }
+                if is_key_pressed(KeyCode::Key5) {
+                    player.current_item = 4;
+                }
+                if is_key_pressed(KeyCode::Key6) {
+                    player.current_item = 5;
+                }
+                if is_key_pressed(KeyCode::Key7) {
+                    player.current_item = 6;
+                }
+                if is_key_pressed(KeyCode::Key8) {
+                    player.current_item = 7;
+                }
+                if is_key_pressed(KeyCode::Key9) {
+                    player.current_item = 8;
+                }
+                if is_key_pressed(KeyCode::Key0) {
+                    player.current_item = 9;
                 }
                 if is_key_pressed(KeyCode::T) {
                     game_input_state = GameInputState::Chat;
@@ -417,7 +459,12 @@ GRAY,
         // == Send Packets ==
         if will_send <= 1 {
             let packet = PlayerPacket::from_player(&player);
-            send_packet(&mut stream, &packet).unwrap();
+            match send_packet(&mut stream, &packet) {
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("Failed to send packet: {}", e)
+                }
+            };
             will_send = 1;
         } else {
             will_send -= 1;
@@ -428,7 +475,6 @@ GRAY,
         .titlebar(false)
         .ui(&mut root_ui(), |ui| {
             for (i, item) in player.items.iter().enumerate() {
-                println!("{:?}", item.texture.clone());
                 ui.texture(Texture2D::from_file_with_format(fs::read(item.texture.clone().expect("Expected texture").as_str()).unwrap().as_slice(), None), 32.0, 32.0);
             }
         });
@@ -479,7 +525,6 @@ async fn render_player(player: &Player, texture: &Texture2D) {
 
 
     if !player.items.is_empty() {
-        println!("{:?}", player.items[player.current_item]);
         draw_texture_ex(&load_texture(player.items.clone()[player.current_item].texture_equipped.clone().unwrap().as_str()).await.unwrap(),
         player.x - PLAYER_WIDTH / 2.0,
         player.y - PLAYER_HEIGHT / 2.0,

@@ -9,9 +9,9 @@ mod mapping_tool;
 mod packet;
 mod player;
 mod server;
-
+mod resources;
 fn main() {
-    println!("Welcome to Momentum!\nChoose an option:");
+    println!("Welcome to Zone zero!\nChoose an option:");
     println!("1. Start a server");
     println!("2. Play");
     println!("3. Make a map");

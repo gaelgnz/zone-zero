@@ -1,15 +1,21 @@
 use crate::debugutils::log;
 use crate::map::Map;
 use crate::packet::{self, MapPacket};
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::{fs, thread};
-
+use std::{process, fs, thread, env};
+use sha2::{self, Digest, Sha256, Sha256VarCore};
 type ClientList = Arc<Mutex<Vec<TcpStream>>>;
 
 pub fn main() {
-    let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
+    let listener = match TcpListener::bind("127.0.0.1:8080") {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to bind to address: {}", e);
+            process::exit(1);
+        }
+    };
     let clients: ClientList = Arc::new(Mutex::new(Vec::new()));
     let map: Map = serde_json::from_str(
         String::from_utf8(fs::read("map.json").unwrap())
@@ -18,16 +24,20 @@ pub fn main() {
     )
     .unwrap();
 
-    println!("map: {:?}", map);
-
     let serialized_map = MapPacket { data: map }.serialize();
+
+    let exe = env::current_exe().unwrap();
+    let mut sha256 = Sha256::new();
+    io::copy(&mut fs::File::open(exe).unwrap(), &mut sha256).unwrap();
+    let hash = sha256.finalize();
+    println!("Server started! ~ Hash: {:x}", hash);
 
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let stream_clone = stream.try_clone().unwrap();
                 let clients = Arc::clone(&clients);
-                let map_data = serialized_map.clone(); // clone Vec<u8>, not the MapPacket
+                let map_data = serialized_map.clone();
 
                 clients.lock().unwrap().push(stream_clone);
 
@@ -64,7 +74,7 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
     let mut frame_counter = 0;
     loop {
         frame_counter += 1;
-        // Receive a PlayerPacket (length-prefixed + bincode-encoded)
+
         let packet = match packet::receive_packet(&mut stream) {
             Ok(p) => p,
             Err(e) => {
@@ -73,8 +83,20 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
                 break;
             }
         };
-        log(frame_counter, 10, format!("Recieving packages correctly from {}", packet.id).as_str());
-        log(frame_counter, 10, format!("Conected clients: {}", clients.lock().unwrap().len()).as_str());
+        if let Ok(clients_guard) = clients.lock() {
+            log(
+            frame_counter,
+            3600,
+            format!("Recieving packages correctly from {}", packet.id).as_str(),
+            );
+            log(
+            frame_counter,
+            10000,
+            format!("Conected clients: {}", clients_guard.len()).as_str(),
+            );
+        } else {
+            eprintln!("Failed to lock clients mutex for logging.");
+        }
 
 
         let sender_addr = match stream.peer_addr() {

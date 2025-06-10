@@ -5,7 +5,9 @@ use serde::{Serialize, Deserialize};
 use bincode::{Encode, Decode};
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum WeaponKind {
-    Ak47
+    Ak47,
+    Magnum
+
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
@@ -16,6 +18,7 @@ pub enum AmmoType {
 }
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub struct Weapon {
+    pub weapon_kind: WeaponKind,
     pub damage: u32,
     pub bullets_per_shot: u32,
     pub magazine: u32,
@@ -39,6 +42,7 @@ impl Weapon {
             texture: Some("res/weapon_ak47.png".to_string()),
             texture_equipped: Some("res/weapon_ak47_picked.png".to_string()),
             kind: ItemKind::Weapon(Weapon {
+                weapon_kind: WeaponKind::Ak47,
                 damage: 13,
                 bullets_per_shot: 1,
                 magazine: 30,
@@ -63,6 +67,7 @@ impl Weapon {
             texture: Some("res/weapon_magnum.png".to_string()),
             texture_equipped: Some("res/weapon_magnum_picked.png".to_string()),
             kind: ItemKind::Weapon(Weapon {
+                weapon_kind: WeaponKind::Magnum,
                 damage: 40,
                 bullets_per_shot: 1,
                 magazine: 6,

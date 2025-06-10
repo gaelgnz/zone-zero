@@ -1,4 +1,4 @@
-use crate::item::ItemKind;
+use crate::item::{ItemKind, WeaponKind};
 use crate::map::Map;
 use crate::player::{ActionType, Player};
 use bincode::{self, Decode, Encode};
@@ -26,7 +26,7 @@ pub struct PlayerPacket {
     pub message: String,
     pub dir: bool,
     pub actions: Vec<ActionType>,
-    pub current_item: ItemKind,
+    pub current_weapon_kind: Option<WeaponKind>,
 }
 
 impl PlayerPacket {
@@ -39,6 +39,12 @@ impl PlayerPacket {
             message: player.message.clone(),
             dir: player.dir,
             actions: player.actions.clone(),
+            current_weapon_kind: player.items
+                .get(player.current_item)
+                .and_then(|item| match &item.kind {
+                    ItemKind::Weapon(weapon) => Some(weapon.weapon_kind.clone()),
+                    _ => None,
+                }),
         }
     }
 }
