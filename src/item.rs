@@ -88,8 +88,6 @@ impl Weapon {
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum ItemKind {
     Weapon(Weapon),
-    Armor,
-    Consumable,
 }
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub struct Item {

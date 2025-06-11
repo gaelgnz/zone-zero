@@ -1,3 +1,4 @@
+use crate::resources::Resources;
 use crate::common::TILE_SIZE;
 use std::{env, fs, io};
 use crate::debugutils::log;
@@ -46,6 +47,7 @@ pub async fn main() {
     let mut game_input_state = GameInputState::Movement;
 
     println!("Loading assets...");
+    let resources: Resources = Resources::load().await;
     let player_texture =
         Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None);
     let chat_sound = load_sound("res/chat.wav").await.unwrap();
@@ -178,8 +180,8 @@ pub async fn main() {
 GRAY,
         );
 
-        render_player(&player, &player_texture).await;
-        render_players(player_packets.lock().unwrap().clone(), &player_texture).await;
+        render_player(&player, &resources).await;
+        render_players(player_packets.lock().unwrap().clone(), &resources).await;
 
         // === Map and Objects Rendering ===
         for (y, row) in map.tiles.iter().enumerate() {
@@ -486,14 +488,14 @@ GRAY,
     }
 }
 
-async fn render_players(player_packets: Vec<PlayerPacket>, texture: &Texture2D) {
+async fn render_players(player_packets: Vec<PlayerPacket>, resources: &Resources) {
     for player_packet in player_packets {
         let player = Player::from_player_packet(&player_packet);
-        render_player(&player, texture).await;
+        render_player(&player, resources).await;
     }
 }
 
-async fn render_player(player: &Player, texture: &Texture2D) {
+async fn render_player(player: &Player, resources: &Resources) {
     draw_text(
         &player.name.to_string(),
         player.x - 40.0,
@@ -512,7 +514,7 @@ async fn render_player(player: &Player, texture: &Texture2D) {
         );
     }
     draw_texture_ex(
-        texture,
+        &resources.player_texture,
         player.x - PLAYER_WIDTH / 2.0,
         player.y - PLAYER_HEIGHT / 2.0,
         WHITE,
@@ -525,7 +527,14 @@ async fn render_player(player: &Player, texture: &Texture2D) {
 
 
     if !player.items.is_empty() {
-        draw_texture_ex(&load_texture(player.items.clone()[player.current_item].texture_equipped.clone().unwrap().as_str()).await.unwrap(),
+        draw_texture_ex(match player.items[player.current_item].kind {
+            ItemKind::Weapon(ref weapon) => {
+                match weapon.weapon_kind {
+                    WeaponKind::Ak47 => &resources.weapon_ak47_texture_picked,
+                    WeaponKind::Magnum => &resources.weapon_magnum_texture_picked,
+                }
+            },
+        },
         player.x - PLAYER_WIDTH / 2.0,
         player.y - PLAYER_HEIGHT / 2.0,
         WHITE,
