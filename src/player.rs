@@ -1,4 +1,3 @@
-use std::u64;
 
 use bincode::{Decode, Encode};
 use macroquad::rand::gen_range;
@@ -13,7 +12,6 @@ pub enum ActionType {
 
 #[derive(Debug)]
 pub struct Player {
-    pub health: u32,
     pub name: String,
     pub id: u64,
     pub x: f32,
@@ -30,7 +28,6 @@ pub struct Player {
 impl Player {
     pub fn new(name: String, x: f32, y: f32) -> Self {
         Player {
-            health: 100,
             id: gen_range(u64::MIN, u64::MAX),
             name,
             x,
@@ -49,8 +46,7 @@ impl Player {
 impl Player {
     pub fn from_player_packet(packet: &crate::packet::PlayerPacket) -> Self {
         Self {
-            health: 100,
-            id: gen_range(u64::MIN, u64::MAX),
+            id: gen_range(0, u64::MAX),
             name: packet.name.to_string(),
             x: packet.x,
             y: packet.y,
@@ -59,8 +55,8 @@ impl Player {
             dir: packet.dir,
             message: packet.message.clone(),
             current_item: 0,
-            items: Vec::new(),
-            actions: Vec::new(),
+            items: packet.items.clone(),
+            actions: packet.actions.clone(),
         }
     }
 }

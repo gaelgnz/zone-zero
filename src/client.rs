@@ -7,7 +7,6 @@ use crate::packet::{self, PlayerPacket, send_packet};
 use crate::player::{ActionType, Player};
 use crate::item::{Item, ItemKind, WeaponKind};
 use macroquad::rand::{gen_range, srand, ChooseRandom};
-use ::rand;
 use macroquad::audio::{load_sound, play_sound};
 use macroquad::prelude::*;
 use sha2::{Digest, Sha256};
@@ -48,8 +47,6 @@ pub async fn main() {
 
     println!("Loading assets...");
     let resources: Resources = Resources::load().await;
-    let player_texture =
-        Texture2D::from_file_with_format(include_bytes!("../res/player.png"), None);
     let chat_sound = load_sound("res/chat.wav").await.unwrap();
 
     println!("Connecting to server...");
@@ -162,7 +159,7 @@ pub async fn main() {
                         map.items.retain(|item| item.id != id);
 
                     }
-                    ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
+                    ActionType::Shot((_weapon_kind, from_x, from_y, to_x, to_y)) => {
                         draw_line(from_x, from_y, to_x, to_y, 1.0, WHITE);
                     }
  
@@ -234,7 +231,7 @@ GRAY,
                 ActionType::PickUp(id) => {
                     map.items.retain(|x| x.id != *id);
                 },
-                ActionType::Shot((weapon_kind, from_x, from_y, to_x, to_y)) => {
+                ActionType::Shot((_weapon_kind, from_x, from_y, to_x, to_y)) => {
                     draw_line(*from_x, *from_y, *to_x, *to_y, 1.0, WHITE);
                 }
             }
@@ -276,7 +273,7 @@ GRAY,
                                     mouse_world.x, 
                                     mouse_world.y)))
                             } else {
-                            
+                                todo!("Reload");
                             }
                         }
                     }
@@ -476,7 +473,7 @@ GRAY,
         .movable(false)
         .titlebar(false)
         .ui(&mut root_ui(), |ui| {
-            for (i, item) in player.items.iter().enumerate() {
+            for item in &player.items {
                 ui.texture(Texture2D::from_file_with_format(fs::read(item.texture.clone().expect("Expected texture").as_str()).unwrap().as_slice(), None), 32.0, 32.0);
             }
         });

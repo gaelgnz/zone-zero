@@ -1,11 +1,12 @@
 use crate::debugutils::log;
 use crate::map::Map;
 use crate::packet::{self, MapPacket};
+use crate::player::ActionType;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::{process, fs, thread, env};
-use sha2::{self, Digest, Sha256, Sha256VarCore};
+use sha2::{self, Digest, Sha256};
 type ClientList = Arc<Mutex<Vec<TcpStream>>>;
 
 pub fn main() {
@@ -17,14 +18,15 @@ pub fn main() {
         }
     };
     let clients: ClientList = Arc::new(Mutex::new(Vec::new()));
-    let map: Map = serde_json::from_str(
+    let map_data: Map = serde_json::from_str(
         String::from_utf8(fs::read("map.json").unwrap())
             .unwrap()
             .as_str(),
     )
     .unwrap();
 
-    let serialized_map = MapPacket { data: map }.serialize();
+    let map: Arc<Mutex<Map>> = Arc::new(Mutex::new(map_data.clone()));
+
 
     let exe = env::current_exe().unwrap();
     let mut sha256 = Sha256::new();
@@ -35,14 +37,16 @@ pub fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let serialized_map = MapPacket { data: map.lock().expect("Unreachable").clone() }.serialize();
                 let stream_clone = stream.try_clone().unwrap();
                 let clients = Arc::clone(&clients);
                 let map_data = serialized_map.clone();
+                let map_clone = Arc::clone(&map);
 
                 clients.lock().unwrap().push(stream_clone);
-
+                
                 thread::spawn(move || {
-                    handle_client(stream, clients, map_data);
+                    handle_client(stream, clients, map_data, map_clone);
                 });
             }
             Err(e) => {
@@ -52,8 +56,8 @@ pub fn main() {
     }
 }
 
-pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
-    let map_packet_size = map.len();
+pub fn handle_client(mut stream: TcpStream, clients: ClientList, map_bytes: Vec<u8>, map: Arc<Mutex<Map>>) {
+    let map_packet_size = map_bytes.len();
     println!("Map size: {}", map_packet_size);
     let size_bytes = (map_packet_size as u32).to_be_bytes();
 
@@ -70,7 +74,7 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
     }
 
     // Send the serialized map bytes
-    stream.write_all(&map).unwrap();
+    stream.write_all(&map_bytes).unwrap();
     let mut frame_counter = 0;
     loop {
         frame_counter += 1;
@@ -83,6 +87,14 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
                 break;
             }
         };
+        for action in &packet.actions {
+            match action {
+                ActionType::PickUp(id) => {
+                    map.try_lock().expect("Err").items.retain(|x| x.id != *id);
+                },
+                ActionType::Shot(..) => {}
+            }
+        }
         if let Ok(clients_guard) = clients.lock() {
             log(
             frame_counter,
@@ -139,9 +151,11 @@ pub fn handle_client(mut stream: TcpStream, clients: ClientList, map: Vec<u8>) {
 
     // Remove disconnected client from list
     let mut clients_lock = clients.lock().unwrap();
-    clients_lock.retain(|client| match client.peer_addr() {
-        Ok(addr) => addr != stream.peer_addr().unwrap(),
-        Err(_) => false,
+    let disconnected_addr = stream.peer_addr().ok();
+    clients_lock.retain(|client| match (client.peer_addr(), disconnected_addr) {
+        (Ok(addr), Some(disconnected)) => addr != disconnected,
+        (Ok(_), None) => true,
+        _ => false,
     });
 
     println!(

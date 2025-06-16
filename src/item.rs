@@ -1,13 +1,11 @@
-use std::time::Instant;
 
-use macroquad::{miniquad::TextureFormat, prelude::ImageFormat, rand::gen_range, texture::Texture2D};
+use macroquad::rand::gen_range;
 use serde::{Serialize, Deserialize};
 use bincode::{Encode, Decode};
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
 pub enum WeaponKind {
     Ak47,
     Magnum
-
 }
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode, Debug, PartialEq)]
