@@ -1,10 +1,10 @@
 [package]
 name = "client" # or "bin2"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-shared = { path = "../shared", version = "0.1.0" }
+shared = { path = "../shared" }
 macroquad = "0.4.14"
 
 [[bin]]
