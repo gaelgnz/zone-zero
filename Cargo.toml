@@ -15,6 +15,11 @@ members = [
     "client",
     "server",
 ]
+
 [[bin]]
 name = "server"
 path = "server/src/main.rs"
+
+[[bin]]
+name = "client"
+path = "client/src/main.rs"

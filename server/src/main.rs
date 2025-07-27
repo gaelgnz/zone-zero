@@ -12,6 +12,7 @@ fn main() {
             return;
         }
     };
+    info!("Server started on port 9123, Waiting for connections...");
 
     for stream in listener.incoming() {
         match stream {
@@ -29,4 +30,4 @@ fn main() {
     }
 }
 
-fn handle_client(stream: TcpStream) {}
+fn handle_client(_stream: TcpStream) {}
