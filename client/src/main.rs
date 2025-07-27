@@ -1,4 +1,6 @@
 
+use std::net::TcpStream;
+
 use macroquad::{prelude::*, ui::{hash, root_ui}};
 use shared;
 
@@ -12,6 +14,8 @@ async fn main() {
     let window_size = vec2(400., 400.);
     let mut ip = String::new();
     let mut game_state = GameState::Menu;
+
+    let mut connection: Option<TcpStream> = None;
 
     loop {
         match game_state {
@@ -27,7 +31,17 @@ async fn main() {
                     if ui.button(None, "Connect") {
                         if !ip.is_empty() {
                             info!("Connecting to {}", ip);
-                            // Here you would typically initiate a connection to the server
+                            
+                            match TcpStream::connect(ip.clone()) {
+                                Ok(stream) => {
+                                    connection = Some(stream);
+                                    info!("Connected to {}", ip);
+                                },
+                                Err(e) => {
+                                    info!("Failed to connect: {}", e);
+                                }
+                            }
+
                             game_state = GameState::Playing;
                         } else {
                             info!("Please enter a valid IP address.");
