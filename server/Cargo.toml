@@ -7,3 +7,4 @@ edition = "2021"
 env_logger = "0.11.8"
 log = "0.4.27"
 shared = { path = "../shared" }
+packetio = "0.1.5"

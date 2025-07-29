@@ -8,6 +8,7 @@ bincode = "2.0.1"
 env_logger = "0.11.8"
 log = "0.4.27"
 macroquad = "0.4.14"
+packetio = "0.1.5"
 
 [workspace]
 members = [
@@ -23,3 +24,7 @@ path = "server/src/main.rs"
 [[bin]]
 name = "client"
 path = "client/src/main.rs"
+
+[lib]
+name = "shared"
+path = "shared/src/lib.rs"
